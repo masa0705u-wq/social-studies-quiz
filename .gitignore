@@ -1,0 +1,11 @@
+node_modules/
+.env*
+.dev.vars*
+.sites-runtime/
+.wrangler/
+dist/
+work/
+private/
+backups/
+*.tsbuildinfo
+.DS_Store
