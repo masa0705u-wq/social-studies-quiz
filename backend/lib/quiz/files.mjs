@@ -4,6 +4,14 @@ const uuid=()=>crypto.randomUUID();
 const iso=()=>new Date().toISOString();
 export class Files {
  constructor(store,engine,bucket){this.store=store;this.engine=engine;this.bucket=bucket;}
+ async scheduledBackup(actor='scheduled'){
+   const startedAt=iso();await this.store.put('backup-scheduler',{actor,startedAt,status:'running'});
+   try{
+     const result=await this.backup(actor,{automatic:true});
+     await this.store.put('backup-scheduler',{actor,startedAt,finishedAt:iso(),status:result.skipped?'skipped':'complete',backupId:result.id??null});
+     return result;
+   }catch(error){await this.store.put('backup-scheduler',{actor,startedAt,finishedAt:iso(),status:'failed',error:String(error.message)});throw error;}
+ }
  async upload(actor,input){
    ensure(typeof input.data==='string'&&input.data.length<7500000,'FILE_SIZE','画像は2MB、参考資料は5MBまでです。',413);
    const match=/^data:([^;]+);base64,([A-Za-z0-9+/=\r\n]+)$/.exec(input.data);ensure(match,'FILE_FORMAT');
@@ -32,7 +40,7 @@ export class Files {
    if(!acquired)return {skipped:true};const id=uuid(),prefix='backups/'+id+'/';
    await this.store.put('backup:'+id,{id,status:'running',actor,automatic,startedAt:iso(),prefix});
    try{
-     const snapshot=await this.store.snapshot();snapshot.documents=snapshot.documents.filter(d=>!d.key.startsWith('backup:')&&!d.key.startsWith('restore:')&&!d.key.startsWith('rate:')&&d.key!=='backup-lock');
+     const snapshot=await this.store.snapshot();snapshot.documents=snapshot.documents.filter(d=>!d.key.startsWith('backup:')&&!d.key.startsWith('restore:')&&!d.key.startsWith('restore-run:')&&!d.key.startsWith('rate:')&&d.key!=='backup-lock'&&d.key!=='backup-scheduler');
      const fileRecords=snapshot.documents.filter(d=>d.key.startsWith('file:')&&!d.value.deletedAt);const files=[];
      for(const record of fileRecords){const original=await this.bucket.get(record.value.id);ensure(original,'BACKUP_MISSING_FILE','参照ファイルが見つからずバックアップを完了できません。');const body=await original.arrayBuffer();const checksum=await hashBytes(body);const copyKey=prefix+'files/'+record.value.id;await this.bucket.put(copyKey,body,{httpMetadata:original.httpMetadata});files.push({original:record.value.id,copyKey,checksum});}
      const manifest={format:'shakai-quiz-backup',version:1,id,createdAt:iso(),snapshot,files};const serialized=JSON.stringify(manifest);await this.bucket.put(prefix+'manifest.json',serialized,{httpMetadata:{contentType:'application/json'}});
@@ -44,11 +52,15 @@ export class Files {
    }catch(error){await this.store.put('backup:'+id,{id,status:'failed',error:String(error.message),prefix,finishedAt:iso()});await this.store.mutate(key,d=>{d.until=0;return{result:true};});throw error;}
  }
  async restoreTest(actor,id){const meta=await this.store.read('backup:'+id);ensure(meta?.value.status==='complete','BACKUP_NOT_COMPLETE');const object=await this.bucket.get(meta.value.prefix+'manifest.json');ensure(object,'BACKUP_MISSING');const serialized=await object.text();ensure(await hash(serialized)===meta.value.checksum,'BACKUP_CHECKSUM');const manifest=JSON.parse(serialized);ensure(manifest.version===1&&manifest.format==='shakai-quiz-backup','BACKUP_VERSION');
-   const runId=uuid(),map={};for(const file of manifest.files){const o=await this.bucket.get(file.copyKey);ensure(o,'BACKUP_MISSING_FILE');const body=await o.arrayBuffer();ensure(await hashBytes(body)===file.checksum,'BACKUP_CHECKSUM');const target='restored/'+runId+'/'+file.original;await this.bucket.put(target,body,{httpMetadata:o.httpMetadata});map[file.original]=target;}
+   const runId=uuid(),map={};for(const file of manifest.files){const o=await this.bucket.get(file.copyKey);ensure(o,'BACKUP_MISSING_FILE');const body=await o.arrayBuffer();ensure(await hashBytes(body)===file.checksum,'BACKUP_CHECKSUM');const target='restored/'+runId+'/'+file.original;await this.bucket.put(target,body,{httpMetadata:o.httpMetadata});const copied=await this.bucket.get(target);ensure(copied&&await hashBytes(await copied.arrayBuffer())===file.checksum,'RESTORE_VERIFY','復元ファイルの照合に失敗しました。');map[file.original]=target;}
    const rewrite=v=>{if(typeof v==='string')return map[v]??v;if(Array.isArray(v))return v.map(rewrite);if(v&&typeof v==='object')return Object.fromEntries(Object.entries(v).map(([k,x])=>[k,rewrite(x)]));return v;};
    for(const doc of manifest.snapshot.documents){const value=rewrite(doc.value);await this.store.put('restore:'+runId+':'+doc.key,value);const read=await this.store.read('restore:'+runId+':'+doc.key);delete read.value._mutation;delete value._mutation;ensure(JSON.stringify(read.value)===JSON.stringify(value),'RESTORE_VERIFY');}
    // Response/audit history is restored into isolated documents, preserving original records.
-   for(const event of manifest.snapshot.events)await this.store.put('restore:'+runId+':event:'+event.key,{...event,payload:rewrite(JSON.parse(event.payload))});
+   for(const event of manifest.snapshot.events){
+     const key='restore:'+runId+':event:'+event.key,value={...event,payload:rewrite(JSON.parse(event.payload))};
+     await this.store.put(key,value);const restored=await this.store.read(key);delete restored.value._mutation;
+     ensure(JSON.stringify(restored.value)===JSON.stringify(value),'RESTORE_VERIFY','回答・監査履歴の照合に失敗しました。');
+   }
    const result={id:runId,backupId:id,actor,verifiedAt:iso(),documents:manifest.snapshot.documents.length,events:manifest.snapshot.events.length,files:manifest.files.length,namespace:'restore:'+runId+':',productionUnchanged:true};await this.store.put('restore-run:'+runId,result);return result;
  }
 }

@@ -25,5 +25,13 @@ export class Store {
     throw new QuizError('BUSY','回答が集中しています。同じ送信のまま再試行してください。',409);
   }
   async put(key,value){return this.mutate(key,doc=>{Object.keys(doc).forEach(k=>delete doc[k]);Object.assign(doc,value);return{result:true};},{});}
-  async snapshot(){const docs=await this.list('');const r=await this.db.prepare('SELECT key,game_id,kind,payload,created_at FROM quiz_events ORDER BY created_at,key').all();return{documents:docs,events:r.results};}
+  async snapshot(){
+    // D1 executes a batch in one transaction, so game state and its response
+    // history cannot be separated by a concurrently accepted submission.
+    const [docs,events]=await this.db.batch([
+      this.db.prepare('SELECT key,version,data FROM quiz_documents ORDER BY key'),
+      this.db.prepare('SELECT key,game_id,kind,payload,created_at FROM quiz_events ORDER BY created_at,key'),
+    ]);
+    return{documents:docs.results.map(r=>({key:r.key,version:r.version,value:JSON.parse(r.data)})),events:events.results};
+  }
 }

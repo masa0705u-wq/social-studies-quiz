@@ -11,6 +11,6 @@ export async function POST(request:Request){const rpc=await request.json() as an
  const user=await getChatGPTUser();const ids=String((env as any).QUIZ_TEACHER_IDS||'').split(','),emails=String((env as any).QUIZ_TEACHER_EMAILS||'').toLowerCase().split(',');
  if(!user||(!ids.includes(user.userId)&&!emails.includes(user.email.toLowerCase())))return new Response('Forbidden',{status:403});
  try{if(rpc.method!=='tools/call'||!tools.some(t=>t.name===rpc.params?.name))throw Error('対応していない操作です。');if(!env.DB||!env.BUCKET)throw Error('保存基盤が未接続です。');const store=new Store(env.DB),engine=new Engine(store);
-  const result=rpc.params.name==='backup_if_due'?await new Files(store,engine,env.BUCKET).backup(user.userId,{automatic:true}):{backups:(await store.list('backup:')).map((x:any)=>x.value),restoreRuns:(await store.list('restore-run:')).map((x:any)=>x.value)};
+  const result=rpc.params.name==='backup_if_due'?await new Files(store,engine,env.BUCKET).scheduledBackup(user.userId):{scheduler:(await store.read('backup-scheduler'))?.value??null,backups:(await store.list('backup:')).map((x:any)=>x.value),restoreRuns:(await store.list('restore-run:')).map((x:any)=>x.value)};
   return response({content:[{type:'text',text:JSON.stringify(result)}]});
  }catch(error:any){return response({isError:true,content:[{type:'text',text:error.message}]});}}

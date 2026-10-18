@@ -9,7 +9,7 @@ export default {
     const { Files } = await import('../lib/quiz/files.mjs');
     if (!env.DB || !env.BUCKET) return;
     const store = new Store(env.DB);
-    ctx.waitUntil(new Files(store, new Engine(store), env.BUCKET).backup('scheduled', { automatic: true }));
+    ctx.waitUntil(new Files(store, new Engine(store), env.BUCKET).scheduledBackup());
   },
   fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext<{ CONNECTORS?: ConnectorBinding }>) {
     let binding = ctx.props?.CONNECTORS;

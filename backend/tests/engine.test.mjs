@@ -7,7 +7,7 @@ import {Engine,freshCatalog} from '../lib/quiz/engine.mjs';
 import {Files} from '../lib/quiz/files.mjs';
 class D1{
  constructor(){this.db=new DatabaseSync(':memory:');this.db.exec(readFileSync(new URL('../drizzle/0000_jittery_giant_man.sql',import.meta.url),'utf8'));}
- prepare(sql){const db=this.db;let bindings=[];return {bind(...values){bindings=values;return this;},async first(){return db.prepare(sql).get(...bindings)||null;},async all(){return{results:db.prepare(sql).all(...bindings)};},run(){const result=db.prepare(sql).run(...bindings);return{meta:{changes:Number(result.changes)}};}};}
+ prepare(sql){const db=this.db;let bindings=[];return {bind(...values){bindings=values;return this;},async first(){return db.prepare(sql).get(...bindings)||null;},async all(){return{results:db.prepare(sql).all(...bindings)};},run(){if(/^SELECT\b/i.test(sql))return{results:db.prepare(sql).all(...bindings),meta:{changes:0}};const result=db.prepare(sql).run(...bindings);return{meta:{changes:Number(result.changes)}};}};}
  async batch(statements){this.db.exec('BEGIN');try{const results=statements.map(s=>s.run());this.db.exec('COMMIT');return results;}catch(error){this.db.exec('ROLLBACK');throw error;}}
 }
 class Bucket{
@@ -86,4 +86,37 @@ test('T19/T22 uploaded image bytes verified, references prevent deletion, backup
 test('T10 D1 transaction rollback prevents response/audit rows on CAS failure',async()=>{
  const store=new Store(new D1());await store.put('x',{n:0});await Promise.all(Array.from({length:6},(_,i)=>store.mutate('x',async d=>{await new Promise(r=>setTimeout(r,1));d.n++;return{result:true,events:[{key:'event-'+i,kind:'audit',gameId:'x',payload:{n:d.n}}]}})));
  assert.equal((await store.read('x')).value.n,6);assert.equal((await store.events('x')).length,6);
+});
+test('T22 backup captures documents and answer history in one transaction, excludes restored copies',async()=>{
+ const f=await fixture({count:1}),bucket=new Bucket(),files=new Files(f.store,f.engine,bucket);const state=await start(f);
+ await send(f,f.sessions[0],state.round.id,'TEST0');
+ const db=f.store.db,original=db.batch.bind(db);let captureBatches=0;
+ db.batch=async statements=>{const result=await original(statements);if(result.length===2&&result.every(x=>Array.isArray(x.results)))captureBatches++;return result;};
+ const backup=await files.backup('t');assert.equal(captureBatches,1);
+ const run=await files.restoreTest('t',backup.id);assert.equal(run.events,(await f.store.snapshot()).events.length);
+ const event=(await f.store.events(f.id))[0];const restored=await f.store.read(run.namespace+'event:'+event.key);assert.deepEqual(restored.value.payload,event.payload);
+ const second=await files.backup('t');const manifest=JSON.parse(await(await bucket.get(second.prefix+'manifest.json')).text());
+ assert.ok(manifest.snapshot.documents.every(d=>!d.key.startsWith('restore:')&&!d.key.startsWith('restore-run:')));
+ assert.equal(manifest.snapshot.documents.length,backup.documents);
+});
+test('T22 corrupt backup or restored history never produces a successful verification record',async()=>{
+ const f=await fixture({count:1}),bucket=new Bucket(),files=new Files(f.store,f.engine,bucket);const state=await start(f);await send(f,f.sessions[0],state.round.id,'TEST0');
+ const backup=await files.backup('t'),key=backup.prefix+'manifest.json';const original=await(await bucket.get(key)).text();
+ await bucket.put(key,original+' ');await assert.rejects(()=>files.restoreTest('t',backup.id),e=>e.code==='BACKUP_CHECKSUM');
+ assert.equal((await f.store.list('restore-run:')).length,0);await bucket.put(key,original);
+ const read=f.store.read.bind(f.store);f.store.read=async key=>{const result=await read(key);if(key.startsWith('restore:')&&key.includes(':event:')&&result)result.value.payload={corrupted:true};return result;};
+ await assert.rejects(()=>files.restoreTest('t',backup.id),e=>e.code==='RESTORE_VERIFY');assert.equal((await f.store.list('restore-run:')).length,0);
+});
+test('T22 automatic backup reports its actual completion, skip, and failure',async()=>{
+ const f=await fixture({count:1}),bucket=new Bucket(),files=new Files(f.store,f.engine,bucket);
+ const first=await files.scheduledBackup();assert.equal(first.status,'complete');let status=(await f.store.read('backup-scheduler')).value;assert.equal(status.status,'complete');assert.equal(status.backupId,first.id);
+ assert.equal((await files.scheduledBackup()).skipped,true);assert.equal((await f.store.read('backup-scheduler')).value.status,'skipped');
+ await f.store.put('backup-lock',{until:0,lastSuccess:0});await f.store.put('file:assets/missing',{id:'assets/missing'});
+ await assert.rejects(()=>files.scheduledBackup(),e=>e.code==='BACKUP_MISSING_FILE');status=(await f.store.read('backup-scheduler')).value;assert.equal(status.status,'failed');assert.ok(status.finishedAt);
+});
+test('T22 restore rejects damaged destination image bytes',async()=>{
+ const f=await fixture({count:1}),bucket=new Bucket(),files=new Files(f.store,f.engine,bucket);
+ await files.upload('t',{name:'fixture.png',data:'data:image/png;base64,'+btoa(String.fromCharCode(137,80,78,71,13,10,26,10))});const backup=await files.backup('t');
+ const put=bucket.put.bind(bucket);bucket.put=async(key,value,opts)=>put(key,key.startsWith('restored/')?new Uint8Array([0]):value,opts);
+ await assert.rejects(()=>files.restoreTest('t',backup.id),e=>e.code==='RESTORE_VERIFY');assert.equal((await f.store.list('restore-run:')).length,0);
 });

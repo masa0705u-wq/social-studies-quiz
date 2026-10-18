@@ -52,6 +52,7 @@ export async function POST(request:Request){
       const r=g.rounds[g.index];ensure(r?.question.images.some((i:any)=>i.fileId===input.fileId),'FILE_FORBIDDEN','現在の問題画像だけ取得できます。',403);result=await files.read(input.fileId);
    }
    else if(action==='backup')result=await files.backup(actor);
+   else if(action==='backupStatus')result=(await store.read('backup-scheduler'))?.value??null;
    else if(action==='backups')result=(await store.list('backup:')).map((x:{value:any})=>x.value).sort((a:any,b:any)=>(b.finishedAt||'').localeCompare(a.finishedAt||''));
    else if(action==='restoreTest')result=await files.restoreTest(actor,input.id);
    else if(action==='restoreRuns')result=(await store.list('restore-run:')).map((x:{value:any})=>x.value);

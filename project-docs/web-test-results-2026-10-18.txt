@@ -1,20 +1,24 @@
-✔ home and maintenance preview never poll the game API (6.203458ms)
-✔ T20 import atomic validation and edits reset approval, immutable IDs, archive retained (5.268084ms)
-✔ T10 persistent request idempotency survives deadline and rejects duplicate participation (14.305375ms)
-✔ T11/T12 server deadline, pause/resume, extension, hint and final-answer rules (4.289459ms)
-✔ T13 eight simultaneous submissions and identical concurrent retries use CAS without data loss (11.289125ms)
-✔ T16 student/projector cannot see unrevealed answers or other-group response text (6.074042ms)
-✔ T17/T18 reassign invalidates old token and permits new device during an active round (5.905083ms)
-✔ T14 teacher rescue is audited, score corrections recalculate totals, all response histories retained (3.09025ms)
-✔ T24/T26 isolated eight-group full engine game: opening, 5 questions, hints, reconnect, rescue, reverse ranks (39.476958ms)
-✔ T21 snapshot survives question edit and year switch, settings validation (2.637208ms)
-✔ T19/T22 uploaded image bytes verified, references prevent deletion, backup and isolated restore verify files/events/settings (4.725334ms)
-✔ T10 D1 transaction rollback prevents response/audit rows on CAS failure (8.221833ms)
-ℹ tests 12
+✔ home and maintenance preview never poll the game API (6.605417ms)
+✔ T20 import atomic validation and edits reset approval, immutable IDs, archive retained (6.025375ms)
+✔ T10 persistent request idempotency survives deadline and rejects duplicate participation (14.882083ms)
+✔ T11/T12 server deadline, pause/resume, extension, hint and final-answer rules (4.251667ms)
+✔ T13 eight simultaneous submissions and identical concurrent retries use CAS without data loss (8.571584ms)
+✔ T16 student/projector cannot see unrevealed answers or other-group response text (4.545667ms)
+✔ T17/T18 reassign invalidates old token and permits new device during an active round (4.869542ms)
+✔ T14 teacher rescue is audited, score corrections recalculate totals, all response histories retained (3.452333ms)
+✔ T24/T26 isolated eight-group full engine game: opening, 5 questions, hints, reconnect, rescue, reverse ranks (38.45175ms)
+✔ T21 snapshot survives question edit and year switch, settings validation (2.910333ms)
+✔ T19/T22 uploaded image bytes verified, references prevent deletion, backup and isolated restore verify files/events/settings (4.179834ms)
+✔ T10 D1 transaction rollback prevents response/audit rows on CAS failure (7.613292ms)
+✔ T22 backup captures documents and answer history in one transaction, excludes restored copies (3.883959ms)
+✔ T22 corrupt backup or restored history never produces a successful verification record (3.55925ms)
+✔ T22 automatic backup reports its actual completion, skip, and failure (2.585959ms)
+✔ T22 restore rejects damaged destination image bytes (2.341709ms)
+ℹ tests 16
 ℹ suites 0
-ℹ pass 12
+ℹ pass 16
 ℹ fail 0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 157.981042
+ℹ duration_ms 157.808125

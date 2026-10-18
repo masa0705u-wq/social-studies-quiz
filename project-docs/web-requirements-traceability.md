@@ -11,26 +11,28 @@
 |T13 同時送信|D1 CAS＋同一batch内の条件付き履歴保存|8班同時、同じIDの並列再送、実Worker/D1 HTTP|ローカル成功。公開負荷未検証|
 |T14 代理回答/採点修正/再集計/監査|engine.command, teacher UI|代理回答/理由/再計算/履歴|サーバー成功。UI一連の確認は残る|
 |T15 同点同順位/複数優勝|engine.standings、順位UI|8班5問、実HTTPの6班同時優勝|成功|
-|T16 教師/生徒/投影権限と情報漏洩|API認可、検証済みID/メール許可リスト、役割別view|教師API未認証403、他班回答/発表前正答・得点の非表示|ローカル成功。Sites本番認証未検証|
+|T16 教師/生徒/投影権限と情報漏洩|API認可、検証済みID/メール許可リスト、役割別view|教師API未認証403、他班回答/発表前正答・得点の非表示|ローカル成功。教員画面の表示をユーザーが確認。公開APIで未認証教員操作の403を確認|
 |T17 二重参加拒否/端末解除と再割当|join/participant/command.reassign|重複拒否、旧トークン失効、進行中に再参加|エンジン成功|
 |T18 再読込/再接続/下書き/送信状態|public/quiz-app.js、state API、localStorage|教師認証・設定・ゲーム作成・受付をブラウザ確認、API再接続|3画面全体のブラウザ通しは未完|
 |T19 複数画像/並替/参照保護|Files.attach/remove/read、画像管理UI|型/サイズ、参照中削除拒否、原本と復元ファイルの照合|ローカル成功。実投影画像/全画面は未確認|
 |T20 問題登録/編集/複製/検索/承認/取込/出典/類似|engine.mjs,rules.mjs、問題バンクUI、CSV/JSON|一括検証、未確認強制、ID/版、編集・アーカイブ維持|サーバー成功。全UI操作の受入確認は残る|
 |T21 年度/クラス/班/過年度保持/共通問題|catalog、年度UI|年度追記、既存ゲームの不変スナップショット|ローカル成功|
-|T22 手動/自動バックアップ・復元|files.mjs、MCP、scheduled、管理UI|SQLite＋R2モック、実ローカルWorkerの手動保存/隔離復元|手動・テスト復元成功。定期起動/本番復旧手順は残課題|
+|T22 手動/自動バックアップ・復元|files.mjs、MCP、scheduled、管理UI|SQLite＋R2モック、実ローカルWorkerの手動保存/隔離復元|手動・テスト復元成功。同時点スナップショット、復元履歴/画像照合、自動起動状態の記録を追加。定期起動/本番復旧は未完|
 |T23 音声/音量/ミュート/スキップ/演出|WebAudio、紙吹雪、opening/ranking操作|コード/サーバー遷移確認|実音声、Chromebook、画面の全操作未確認|
 |T24 実績から隔離した8班シミュレーション|isSimulation、tests/engine.test.mjs|8班5問で満点/ヒント後/回答変更/無回答/切断/代理/修正/逆順順位|サーバー通し成功。3画面同時通しは別ゲート|
 |T25 プリセット/前回設定/所要時間内訳|teacher設定、estimate|単体＋実ブラウザで入力/内訳更新/候補生成|ローカル成功|
 |T26 開始〜逆順順位発表の通し|engine、API、3画面|8班5問エンジン＋実HTTP1問8班がendedまで完走|サーバー成功。3画面を含む完成ゲート未達|
-|公開/GitHub|main/docsからGitHub Pages、backend/にソース|GitHub保存、HTTPS200、公開画面と準備中表示をブラウザ確認|画面プレビューのみ公開。Sites送信は承認ポリシーで停止|
+|公開/GitHub|main/docsからGitHub Pages、backend/にソース|GitHub保存、HTTPS200、公開画面と準備中表示をブラウザ確認|Sites更新配備成功。入口公開はユーザー承認済み。公開APIの教員保護・GitHub Origin確認成功|
 |秘密・資料・成績のGit除外|明示的な公開用エクスポート、.gitignore|67ファイルの送信対象検査、.dev.vars/.wrangler/work等を除外|実データ・正答・画像・認証情報を送信していない（試験問題は架空）|
 |問題作成Skill|skills/question-generator/SKILL.md（既存）|内容確認、出典/未確認JSONとの取込互換|実教材の生成・教師承認は未実施|
 |学校実機|学校用チェックリスト|教師PC/投影/Chromebook/学校ネットワーク|未実施、授業前必須|
 
-## 公開を停止している具体的な条件
+## 公開・検証の現在地
 
-Sites公式source helperは起動できるが、認証情報を標準入力で渡すwrite_stdinが `approval required by policy, but ... sandbox_approval is false` と拒否される。フォルダ・Git領域・ネットワークの明示的な権限申請後も同じ拒否。送信は実行されていない。別手段で承認を迂回しない。
+2026-10-18、フルアクセス反映後に送信・配備が成功。現在のサーバーコミットはa2e6a537beb4b638ac6aaf2212926220780b04d6、配備appgdep_6ad4b11441cc8191be5b55b4f6881bb8（succeeded）。入口をpublicへ変更することをユーザーが明示承認し、適用済み。教員認証は維持。
 
-Site ID: appgprj_6ad4890539308191982cedcdf5dbd16d。再開時に新しいSiteを作成しない。短期ソース認証情報は期限切れを確認して同じSiteで再発行し、公式手順に従い保存・公開する。
+公開APIで未認証teacher.me/catalog/backups/backupStatus/teacherImageの403とTEACHER_REQUIRED、GitHub OriginのCORS許可、異なるOriginへのCORS非許可、無効な参加コードの拒否を確認。実データを読まない匿名リクエストだけで検証した。ユーザーが先生のコントロールルームの表示を確認。
 
-GitHub Pagesのconfig.backendReady=falseを保持し、公開サーバーと認証/CORSを検証してからtrueにする。現時点の画面を授業利用可能とは扱わない。
+Webの自動テストは16成功。ローカルWorkerで8班の同時回答、再送、正答秘匿、画像トークン、6班同時優勝、模擬実績除外、画像付きバックアップ/履歴復元を確認。ブラウザ閲覧は許可拒否のため、この回の3画面UI検証は実施できていない。公開環境の班参加〜採点、実音声、定期バックアップ実起動、本番復旧、学校実機は未確認。
+
+GitHub Pagesは動作検証版として準備中ガードを解除し、模擬ゲームを試せる入口へ更新する。公開完了と全受入完了を区別する。
