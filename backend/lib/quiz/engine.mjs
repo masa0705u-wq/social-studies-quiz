@@ -32,16 +32,17 @@ export class Engine {
    c.years.push(year);c.activeYearId=year.id;audit(c,actor,'year.create',{id:year.id,label:year.label});return year;
  });}
  async activateYear(actor,id){return this.updateCatalog(actor,c=>{ensure(c.years.some(y=>y.id===id),'NOT_FOUND');c.activeYearId=id;audit(c,actor,'year.activate',{id});return true;});}
- async saveQuestion(actor,input){return this.updateCatalog(actor,c=>{
+ async saveQuestion(actor,input){return this.updateCatalog(actor,async c=>{
    const parsed=Rules.validateQuestion(input),previous=input.questionId?c.questions.find(q=>q.questionId===input.questionId):null;
-   ensure(!input.questionId||previous,'NOT_FOUND');
-   const q={...parsed,questionId:previous?.questionId??uid(),version:(previous?.version??0)+1,createdAt:previous?.createdAt??nowIso(),updatedAt:nowIso(),approvalStatus:'unreviewed',reuseEnabled:input.reuseEnabled!==false,archived:false,images:previous?.images??[],similarQuestionIds:Rules.similarQuestions(parsed,c.questions.filter(q=>q.questionId!==previous?.questionId)).map(q=>q.questionId)};
+   ensure(!input.questionId||previous,'NOT_FOUND');await this.verifySourceFiles(c,[parsed]);parsed.sources=parsed.sources.map(s=>({...s,sourceId:previous?.sources.some(old=>old.sourceId===s.sourceId)?s.sourceId:uid()}));
+   const q={...parsed,questionId:previous?.questionId??uid(),version:(previous?.version??0)+1,createdAt:previous?.createdAt??nowIso(),updatedAt:nowIso(),approvalStatus:'unreviewed',reuseEnabled:input.reuseEnabled!==false,archived:previous?.archived??false,images:previous?.images??[],similarQuestionIds:Rules.similarQuestions(parsed,c.questions.filter(q=>q.questionId!==previous?.questionId)).map(q=>q.questionId)};
    if(previous)c.questions[c.questions.indexOf(previous)]=q;else c.questions.push(q);
    audit(c,actor,'question.save',{id:q.questionId,version:q.version});return q;
  });}
  async importQuestions(actor,inputs){ensure(Array.isArray(inputs)&&inputs.length>0&&inputs.length<=200,'IMPORT_LIMIT','1回に1〜200問を取り込めます。');const validated=inputs.map(q=>Rules.validateQuestion(q));
-   return this.updateCatalog(actor,c=>{const added=[];for(const q of validated){const doc={...q,questionId:uid(),version:1,createdAt:nowIso(),updatedAt:nowIso(),approvalStatus:'unreviewed',reuseEnabled:true,archived:false,images:[],similarQuestionIds:Rules.similarQuestions(q,c.questions).map(x=>x.questionId)};c.questions.push(doc);added.push(doc);}audit(c,actor,'question.import',{count:added.length});return added;});
+   return this.updateCatalog(actor,async c=>{await this.verifySourceFiles(c,validated);const added=[];for(const q of validated){q.sources=q.sources.map(s=>({...s,sourceId:uid()}));const doc={...q,questionId:uid(),version:1,createdAt:nowIso(),updatedAt:nowIso(),approvalStatus:'unreviewed',reuseEnabled:true,archived:false,images:[],similarQuestionIds:Rules.similarQuestions(q,c.questions).map(x=>x.questionId)};c.questions.push(doc);added.push(doc);}audit(c,actor,'question.import',{count:added.length});return added;});
  }
+ async verifySourceFiles(c,questions){for(const q of questions){for(const source of q.sources){if(!source.driveFileId)continue;ensure(/^sources\/[A-Za-z0-9-]+$/.test(source.driveFileId)&&!c.deletedFiles?.includes(source.driveFileId),'SOURCE_FILE','参考資料は専用ファイル管理でアップロードしてください。');const meta=await this.store.read('file:'+source.driveFileId);ensure(meta&&!meta.value.deletedAt,'SOURCE_FILE','参考資料が見つかりません。');}}}
  async questionAction(actor,input){return this.updateCatalog(actor,c=>{const q=c.questions.find(q=>q.questionId===input.id);ensure(q,'NOT_FOUND');
    if(input.command==='approve'){q.approvalStatus='approved';}
    else if(input.command==='reject')q.approvalStatus='rejected';
@@ -95,7 +96,7 @@ export class Engine {
  view(g,role,p){const r=g.rounds[g.index],reveal=['reveal','ranking','ended'].includes(g.status),teacher=role==='teacher';
    const data={id:g.id,status:g.status,index:g.index,questionCount:g.rounds.length,className:g.className,yearLabel:g.yearLabel,revision:g.revision,serverNow:this.now(),settings:g.settings,openingUntil:g.openingUntil,rankShown:g.rankShown,explanationStep:g.explanationStep||1,
     groups:g.groups.map(group=>({...group,joined:g.participants.some(p=>p.groupId===group.id&&!p.revokedAt),connected:g.participants.some(p=>p.groupId===group.id&&!p.revokedAt&&this.now()-p.lastSeenAt<20000)})),
-    scores:this.standings(g).map(row=>{const x={...row};if(!['ranking','ended'].includes(g.status))delete x.rank;return x;}).sort((a,b)=>g.groups.findIndex(x=>x.id===a.groupId)-g.groups.findIndex(x=>x.id===b.groupId)),
+    scores:this.standings(!teacher&&!reveal?{...g,rounds:g.rounds.map((round,index)=>index===g.index?{...round,scores:{}}:round)}:g).map(row=>{const x={...row};if(!['ranking','ended'].includes(g.status))delete x.rank;return x;}).sort((a,b)=>g.groups.findIndex(x=>x.id===a.groupId)-g.groups.findIndex(x=>x.id===b.groupId)),
     round:r?{id:r.id,title:r.question.title,body:r.question.body,difficulty:r.question.difficulty,images:role==='student'?[]:r.question.images,hint:r.clock?.hintShownAt!==null&&r.clock?.hintShownAt!==undefined?r.question.hintText:null,clock:r.clock,
       answered:r.receivers.filter(id=>r.responses[id]?.latest),results:reveal||teacher?r.scores:null,...(reveal||teacher?{primaryAnswer:r.question.primaryAnswer,explanation:r.question.explanation,acceptedAnswers:r.question.acceptedAnswers}:{})}:null};
    if(teacher){data.rounds=g.rounds;data.participants=g.participants.map(({tokenHash,...rest})=>rest);data.audit=g.audit;data.responses=r?.responses??{};data.isSimulation=g.isSimulation;}

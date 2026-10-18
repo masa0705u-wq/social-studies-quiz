@@ -1,0 +1,20 @@
+✔ home and maintenance preview never poll the game API (6.203458ms)
+✔ T20 import atomic validation and edits reset approval, immutable IDs, archive retained (5.268084ms)
+✔ T10 persistent request idempotency survives deadline and rejects duplicate participation (14.305375ms)
+✔ T11/T12 server deadline, pause/resume, extension, hint and final-answer rules (4.289459ms)
+✔ T13 eight simultaneous submissions and identical concurrent retries use CAS without data loss (11.289125ms)
+✔ T16 student/projector cannot see unrevealed answers or other-group response text (6.074042ms)
+✔ T17/T18 reassign invalidates old token and permits new device during an active round (5.905083ms)
+✔ T14 teacher rescue is audited, score corrections recalculate totals, all response histories retained (3.09025ms)
+✔ T24/T26 isolated eight-group full engine game: opening, 5 questions, hints, reconnect, rescue, reverse ranks (39.476958ms)
+✔ T21 snapshot survives question edit and year switch, settings validation (2.637208ms)
+✔ T19/T22 uploaded image bytes verified, references prevent deletion, backup and isolated restore verify files/events/settings (4.725334ms)
+✔ T10 D1 transaction rollback prevents response/audit rows on CAS failure (8.221833ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 157.981042

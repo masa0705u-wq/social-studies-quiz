@@ -25,9 +25,9 @@ test('T20 import atomic validation and edits reset approval, immutable IDs, arch
  const store=new Store(new D1()),engine=new Engine(store);
  await assert.rejects(()=>engine.importQuestions('t',[question(1),{title:'invalid'}]));assert.equal((await engine.catalog()).questions.length,0);
  const added=await engine.importQuestions('t',[{...question(1),approvalStatus:'approved',questionId:'injected'}]);assert.equal(added[0].approvalStatus,'unreviewed');assert.notEqual(added[0].questionId,'injected');
- const approved=await engine.questionAction('t',{id:added[0].questionId,command:'approve'});const edited=await engine.saveQuestion('t',{...approved,title:'変更'});assert.equal(edited.questionId,approved.questionId);assert.equal(edited.approvalStatus,'unreviewed');
+ const approved=await engine.questionAction('t',{id:added[0].questionId,command:'approve'});const edited=await engine.saveQuestion('t',{...approved,title:'変更'});assert.equal(edited.questionId,approved.questionId);assert.equal(edited.approvalStatus,'unreviewed');assert.equal(edited.sources[0].sourceId,approved.sources[0].sourceId);
  const copy=await engine.questionAction('t',{id:edited.questionId,command:'duplicate'});assert.notEqual(copy.questionId,edited.questionId);assert.equal(copy.approvalStatus,'unreviewed');
- await engine.questionAction('t',{id:edited.questionId,command:'archive'});assert.equal((await engine.catalog()).questions.find(q=>q.questionId===edited.questionId).archived,true);
+ await engine.questionAction('t',{id:edited.questionId,command:'archive'});assert.equal((await engine.catalog()).questions.find(q=>q.questionId===edited.questionId).archived,true);const archivedEdit=await engine.saveQuestion('t',{...edited,title:'保管中の編集'});assert.equal(archivedEdit.archived,true);
 });
 test('T10 persistent request idempotency survives deadline and rejects duplicate participation',async()=>{
  const f=await fixture({count:1});await assert.rejects(()=>f.engine.join({code:f.created.joinCode,groupId:f.sessions[0].groupId}),e=>e.code==='GROUP_TAKEN');const state=await start(f),session=f.sessions[0];
@@ -49,7 +49,7 @@ test('T16 student/projector cannot see unrevealed answers or other-group respons
  const f=await fixture({count:1}),s=await start(f);await send(f,f.sessions[0],s.round.id,'SECRET_WRONG');const student=await f.engine.state(f.sessions[1],'student');const projector=await f.engine.state({gameId:f.id,token:f.created.projectorToken},'projector');
  for(const data of [student,projector]){const serialized=JSON.stringify(data);assert.ok(!serialized.includes('TEST0'));assert.ok(!serialized.includes('SECRET_WRONG'));assert.ok(!serialized.includes('primaryAnswer'));assert.ok(!serialized.includes('tokenHash'));assert.ok(!serialized.includes('"rank":'));}
  await assert.rejects(()=>f.engine.state({gameId:f.id,token:'invalid'},'student'),e=>e.code==='SESSION');await assert.rejects(()=>f.engine.state({gameId:f.id,token:'invalid'},'projector'),e=>e.code==='PROJECTOR');
- await f.engine.command('t',{gameId:f.id,command:'close'});await f.engine.command('t',{gameId:f.id,command:'reveal'});assert.equal((await f.engine.state(f.sessions[1],'student')).round.primaryAnswer,'TEST0');
+ await f.engine.command('t',{gameId:f.id,command:'proxy',groupId:f.sessions[0].groupId,answer:'TEST0',reason:'架空の試験'});assert.ok((await f.engine.state(f.sessions[1],'student')).scores.every(s=>s.totalPoints===0));await f.engine.command('t',{gameId:f.id,command:'close'});assert.ok((await f.engine.state(f.sessions[1],'student')).scores.every(s=>s.totalPoints===0));await f.engine.command('t',{gameId:f.id,command:'reveal'});assert.equal((await f.engine.state(f.sessions[1],'student')).round.primaryAnswer,'TEST0');
 });
 test('T17/T18 reassign invalidates old token and permits new device during an active round',async()=>{
  const f=await fixture({count:1});await start(f);await f.engine.command('t',{gameId:f.id,command:'reassign',groupId:f.sessions[0].groupId});await assert.rejects(()=>f.engine.state(f.sessions[0],'student'),e=>e.code==='SESSION');

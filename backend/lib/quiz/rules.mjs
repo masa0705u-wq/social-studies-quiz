@@ -246,7 +246,7 @@ Quiz.validateQuestion = function (input) {
     Quiz.assert(s && typeof s === 'object', 'INVALID_SOURCE');
     Quiz.isoDate(s.retrievedAt);
     Quiz.assert(s.url || s.driveFileId || s.unverified === true, 'SOURCE_LOCATION_REQUIRED');
-    return {title: Quiz.text(s.title, 'SOURCE_TITLE', 500), publisher: Quiz.text(s.publisher, 'PUBLISHER', 500),
+    return {sourceId: s.sourceId ? Quiz.id(s.sourceId) : null, title: Quiz.text(s.title, 'SOURCE_TITLE', 500), publisher: Quiz.text(s.publisher, 'PUBLISHER', 500),
       url: Quiz.url(s.url), retrievedAt: s.retrievedAt, driveFileId: s.driveFileId ? (/^sources\/[A-Za-z0-9-]+$/.test(s.driveFileId) ? s.driveFileId : Quiz.id(s.driveFileId)) : '',
       unverified: s.unverified === true, licenseNotes: (s.unverified === true ? '[出典未確認] ' : '') + Quiz.text(s.licenseNotes, 'LICENSE', 2000, true).replace(/^(\[出典未確認\] )+/, ''), field: q.field, unit: q.unit};
   });
